@@ -1,0 +1,678 @@
+---
+title: "LINEAR_REG_Q1"
+output: html_document
+---
+
+```{r}
+library(tidyverse)
+library(cowplot)
+theme_set(theme_cowplot())
+options(scipen=999)
+```
+
+```{r}
+movies_linear_reg = read_csv("/Users/admin/Desktop/320 DATA/movies_linear_reg.csv")
+```
+
+The data we will use for linear regression (Question 1) is above. There are numeric variables, genre dummy variables, the top 6 production companies dummy variables, top 5 country dummy variables, top 4 director dummy variables, and top 5 actor dummy variables, for a total of 49 variables. The top 5s were chosen based on their frequency, i.e they were chosen because they had at least 30 instances in our dataset. Companies/countrys/actors/directors with fewer than 30 were ignored. 
+
+We are trying to predict vote_average by all the other variables.
+
+```{r}
+get.RMSE = function(resids){
+  resids_squared = resids^2
+  resids_squared_summed = sum(resids_squared)
+  resids_squared_summed_div_by_n = resids_squared_summed / length(resids)
+  resids_squared_summed_div_by_n_rooted = sqrt(resids_squared_summed_div_by_n)
+  return(resids_squared_summed_div_by_n_rooted)
+}
+```
+
+We will use the RMSE function above as a way of evaluating the predictive power of the model.
+
+```{r}
+# First a simple, full model
+
+model_1 = lm(vote_average ~ ., data=movies_linear_reg)
+summary(model_1)
+RMSE1 = get.RMSE(model_1$residuals)
+RMSE1
+ARS1 = summary(model_1)$adj.r.squared
+ARS1
+```
+
+Adj. R-Sq is 0.3288, RMSE = 0.8832.
+
+The first thing we notice is that the top 5 actors by freqency, Robert De Niro, Bruce Willis, Matt Damon, Nicolas Cage, and Samuel L Jackson are all insignificant. Therefore, we will drop top 5 actors from the regression.
+
+```{r}
+movies_linear_reg_2 = movies_linear_reg %>% select(-Robert_De_Niro, -Bruce_Willis, -Matt_Damon, -Nicolas_Cage, -Samuel_L_Jackson)
+```
+
+```{r}
+model_2 = lm(vote_average ~ ., data=movies_linear_reg_2)
+summary(model_2)
+RMSE2 = get.RMSE(model_2$residuals)
+RMSE2
+ARS2 = summary(model_2)$adj.r.squared
+ARS2
+```
+
+Adj. R-Squared = .316, RMSE = 0.9389.
+
+Next, of our top 4 Directors, Martin_Scorsese and Steven_Spielberg have large p-values. Thus, we will remove them from the regression. The R-sq and RMSE became worse, but that is expected since fewer variables will always cause that, regardless of significance.
+
+```{r}
+movies_linear_reg_3 = movies_linear_reg_2 %>% select(-Martin_Scorsese, -Steven_Spielberg)
+```
+
+```{r}
+model_3 = lm(vote_average ~ ., data=movies_linear_reg_3)
+summary(model_3)
+RMSE3 = get.RMSE(model_3$residuals)
+RMSE3
+ARS3 = summary(model_3)$adj.r.squared
+ARS3
+```
+
+Adj. R-squared = 0.3165, RMSE = 0.9389.
+
+Next, we will remove insignificant production countries, which are: US, DE, and CA.
+
+```{r}
+movies_linear_reg_4 = movies_linear_reg_3 %>% select(-US, -DE, -CA)
+```
+
+```{r}
+model_4 = lm(vote_average ~ ., data=movies_linear_reg_4)
+summary(model_4)
+RMSE4 = get.RMSE(model_4$residuals)
+RMSE4
+ARS4 = summary(model_4)$adj.r.squared
+ARS4
+```
+
+Adj. R-squared = 0.317, RMSE = 0.939.
+
+Next, we will remove significant production companies: Lionsgate, Columbia, MGM, and Universal Pictures. We will keep Fox because it is close.
+
+```{r}
+movies_linear_reg_5 = movies_linear_reg_4 %>% select(-Lionsgate, -Columbia, -MGM, -Universal_Pictures)
+```
+
+```{r}
+model_5 = lm(vote_average ~ ., data=movies_linear_reg_5)
+summary(model_5)
+RMSE5 = get.RMSE(model_5$residuals)
+RMSE5
+ARS5 = summary(model_5)$adj.r.squared
+ARS5
+```
+
+Adj. R-sq = 0.317, RMSE = 0.939.
+
+Next, we will remove genres which are insignificant. These are: Foreign, TV_Movie, Family, War, History, Horror, Fantasy, Romance, Thriller, Mystery, Sci Fi, Western, and Adventure.
+
+```{r}
+movies_linear_reg_6 = movies_linear_reg_5 %>% select(-Foreign, -TV_Movie, -Family, -War, -History, -Horror, -Fantasy, -Romance, -Thriller, -Mystery, -Science_Fiction, -Western, -Adventure)
+```
+
+```{r}
+model_6 = lm(vote_average ~ ., data=movies_linear_reg_6)
+summary(model_6)
+RMSE6 = get.RMSE(model_6$residuals)
+RMSE6
+ARS6 = summary(model_6)$adj.r.squared
+ARS6
+```
+
+Adj. R-squared = 0.317, RMSE = 0.941.
+
+Now, we have only significant variables. We will now transform some of them to see if we can get better results. First, lets make the budget and revenue variables have smaller number values, since they are currently in the millions. We will do this by dividing them by 1,000,000.
+
+```{r}
+movies_linear_reg_7 = movies_linear_reg_6 %>% mutate(budget_sm = budget / 1000000, revenue_sm = revenue / 1000000) %>% select(-budget, -revenue)
+```
+
+```{r}
+model_7 = lm(vote_average ~ ., data=movies_linear_reg_7)
+summary(model_7)
+RMSE7 = get.RMSE(model_7$residuals)
+RMSE7
+ARS7 = summary(model_7)$adj.r.squared
+ARS7
+```
+
+Let's check for multicolinearity by creating a correlation matrix.
+
+```{r, message=F}
+library(corrplot)
+```
+
+```{r}
+# We have to remove release date because only release date is non-numeric, runtime because of NA errors, vote_average because thats what we're trying to predict, and total_spoken_langs because it takes up too much space
+corrs = movies_linear_reg_7 %>% select(-release_date, -runtime, -vote_average, -total_spoken_languages) %>% cor()
+```
+
+```{r}
+corrplot(corrs, method="color", type="upper", tl.col="black")
+```
+
+As we can see from the plot above, popularity and vote count are correlated, vote_count and revenue_sm, revenue_sm and budget_sm, and certain genre combos are also slightly negatively correlated. Since budget_sm and revenue_sm are numbers with a special relationship with one another, we might want to remove one of them.
+
+```{r}
+movies_linear_reg_8 = movies_linear_reg_7 %>% select(-budget_sm)
+```
+
+```{r}
+model_8 = lm(vote_average ~ ., data=movies_linear_reg_8)
+summary(model_8)
+RMSE8 = get.RMSE(model_8$residuals)
+RMSE8
+ARS8 = summary(model_8)$adj.r.squared
+ARS8
+```
+
+Adj. R-sq = 0.3167, RMSE = 0.941.
+
+Next, lets make a graph of the coefficients.
+
+```{r}
+p1 = 
+  data.frame(summary(model_8)$coefficients) %>% 
+  rownames_to_column() %>% 
+  select(1, 2) %>% 
+  slice(2:n()) %>% 
+  ggplot(aes(reorder(rowname, Estimate), Estimate)) + 
+  geom_bar(stat="identity", fill="#4B9CD3") + 
+  coord_flip() +
+  ggtitle("Value of Significant Coefficients in Final Regression") + 
+  xlab("Variable") + 
+  ylab("Increase/Decrease in IMDB Score per Unit of Variable") +
+  theme(plot.title = element_text(hjust=1.5))
+
+p1
+```
+
+```{r}
+data.frame(summary(model_8)$coefficients) %>% rownames_to_column() %>% slice(1:1) %>% select(1,2)
+```
+
+Keep in mind that the intercept is 5.0467. So the values in the plot above are added to the intercept.
+
+```{r}
+v1 = data.frame(t(c("model_1", RMSE1, ARS1)))
+v2 = data.frame(t(c("model_2", RMSE2, ARS2)))
+v3 = data.frame(t(c("model_3", RMSE3, ARS3)))
+v4 = data.frame(t(c("model_4", RMSE4, ARS4)))
+v5 = data.frame(t(c("model_5", RMSE5, ARS5)))
+v6 = data.frame(t(c("model_6", RMSE6, ARS6)))
+v7 = data.frame(t(c("model_7", RMSE7, ARS7)))
+v8 = data.frame(t(c("model_8", RMSE8, ARS8)))
+
+vv = rbind(v1, v2, v3, v4, v5, v6, v7, v8) %>% rename(model=1, rmse=2, rsq=3)
+vv$rmse = as.numeric(as.character(vv$rmse))
+vv$rsq = as.numeric(as.character(vv$rsq))
+```
+
+```{r}
+vv
+```
+
+```{r}
+p2 = 
+  data.frame(summary(model_8)$coefficients) %>% 
+  rownames_to_column() %>% 
+  select(1, 2) %>% 
+  slice(2:n()) %>% 
+  arrange(Estimate) %>% 
+  filter(rowname != "release_date", rowname != "vote_count", 
+         rowname != "revenue_sm", rowname != "popularity", 
+         rowname != "runtime", rowname != "total_spoken_languages", 
+         rowname != "length_of_title") %>% 
+  ggplot(aes(reorder(rowname, Estimate), Estimate)) + geom_bar(stat="identity", fill="#4B9CD3") + coord_flip() +
+  ggtitle("Value of Significant Categorical Coefficients in Final Regression") + 
+  xlab("Variable") + 
+  ylab("Increase/Decrease in IMDB Score when Dummy Variable == 1") +
+  theme(plot.title = element_text(hjust=1.1)) +
+  annotate("text", x=2, y=.8, label="Intercept = 5.047")
+
+p2
+
+#ggsave("/Users/admin/Desktop/plots 320 FINAL/sigcategorical.png", p2)
+```
+
+```{r}
+genres_only = movies_linear_reg %>% select(4, 10:29)
+genres_only
+```
+
+```{r}
+go_model = lm(vote_average ~ ., data=genres_only)
+summary(go_model)
+```
+
+```{r}
+p3 = 
+  data.frame(summary(go_model)$coefficients) %>% rownames_to_column() %>% rename(name=rowname, val=Estimate) %>% 
+  select(1,2,5) %>% rename(pval=3) %>% mutate(Significant = ifelse(pval <= 0.05, TRUE, FALSE)) %>% select(-pval) %>% 
+  slice(2:n()) %>% arrange(val) %>% slice(2:n()) %>% 
+    ggplot(aes(reorder(name, val), val, fill=Significant)) + geom_bar(stat="identity") + coord_flip() + 
+  scale_fill_manual(values = c("#fa3c3c", "#4B9CD3")) +
+  ggtitle("Change in IMDB Score by Genre in Genre Only Regression") +
+  ylab("Change in IMDB Score (Intercept = 5.629)") +
+  xlab("Genre") +
+  theme(plot.title = element_text(hjust=.5))
+
+p3
+
+#ggsave("/Users/admin/Desktop/plots 320 FINAL/genre_only_reg2.png", p3)
+```
+
+```{r}
+saveRDS(model_8, "/Users/admin/Desktop/320_LINEAR_REG_Q1/model_8.rda")
+```
+
+```{r}
+library(tidyverse)
+library(lubridate)
+library(cowplot)
+theme_set(theme_cowplot())
+```
+
+```{r, warning=F}
+p100 = 
+ movies_linear_reg %>% select(vote_average, release_date) %>% 
+  mutate(year = year(release_date)) %>% select(-2) %>% 
+  group_by(year) %>% 
+  summarize(mean_VA = mean(vote_average)) %>% 
+  ggplot(aes(year, mean_VA)) + geom_point(color="#c7c7c7") + 
+  geom_smooth(method="lm", se=F, color="darkblue") + 
+  ylim(0, 10) +
+  ggtitle("Average IMDB Score by Year") + 
+  theme(plot.title = element_text(hjust=0.5)) +
+  xlab("Year") + 
+  ylab("Average IMDB Score")
+  
+p100
+
+ggsave("/Users/admin/Desktop/plots 320 FINAL/better plots/p100.png", p100)
+```
+
+```{r}
+summary(model_8)
+```
+
+```{r}
+movies_linear_reg_9 = movies_linear_reg_8 %>% select(-total_spoken_languages)
+```
+
+```{r}
+model_9 = lm(vote_average ~ ., data=movies_linear_reg_9)
+summary(model_9)
+RMSE9 = get.RMSE(summary(model_9)$residuals)
+```
+
+```{r}
+library(lubridate)
+```
+
+
+```{r}
+movies_linear_reg_10 = movies_linear_reg_9 %>% mutate(year = year(release_date)) %>% select(-release_date)
+```
+
+```{r}
+model_10 = lm(vote_average ~ ., data=movies_linear_reg_10)
+summary(model_10)
+RMSE10 = get.RMSE(summary(model_10)$residuals)
+```
+
+```{r}
+coefs_line_reg_best = 
+  data.frame(summary(model_10)$coefficients) %>% 
+  rownames_to_column() %>% 
+  select(1, 2, 5) %>% 
+  rename(name=1, coef=2, pval=3) %>% 
+  select(-pval) %>% 
+  arrange(desc(coef)) %>% 
+  slice(2:n()) %>% 
+  mutate(type = ifelse(name %in% c("Documentary", "Animation", "Woody_Allen", "Drama", "Clint_Eastwood",
+                                   "Crime", "UK", "Music", "FR", "Comedy", "Fox_Film_Corp", 
+                                   "Warner_Bros", "Action"), "Binary Categorical", "Numeric")) %>%
+  mutate(type2 = ifelse(type == "Binary Categorical", coef + 1000, coef)) %>% 
+  mutate(name = replace(name, name=="year", "Year Released")) %>% 
+  mutate(name = replace(name, name=="length_of_title", "Length of Title")) %>%
+  mutate(name = replace(name, name=="revenue_sm", "Revenue in Millions")) %>% 
+  mutate(name = replace(name, name=="vote_count", "Vote Count")) %>% 
+  mutate(name = replace(name, name=="popularity", "Popularity")) %>% 
+  mutate(name = replace(name, name=="runtime", "Runtime in Minutes")) %>% 
+  ggplot(aes(reorder(name, type2), coef)) +
+  geom_bar(stat="identity", fill="#4B9CD3") +
+  coord_flip() +
+  facet_grid(cols = vars(type), scales="free") + 
+  theme(panel.spacing.x = unit(7.5, "mm")) +
+  ggtitle("Coefficients of Best IMDB Linear Regression Model") +
+  xlab("Variable") +
+  ylab("Change in IMDB Score per Unit of Variable") +
+  theme(strip.background = element_rect(fill="#bdddff")) +
+  theme(plot.title = element_text(hjust=0.5))
+
+coefs_line_reg_best
+
+aspect_ratio = 1.5
+
+#ggsave("/Users/admin/Desktop/plots 320 FINAL/going foward/coefs_line_reg_best.png", coefs_line_reg_best, height=7, width=7*aspect_ratio)
+```
+
+```{r}
+movies_linear_reg_10 %>% group_by(vote_average) %>% summarize(mean_pop = mean(popularity)) %>% 
+  filter(vote_average<9.3) %>% 
+  ggplot(aes((mean_pop), (vote_average))) + geom_point() + geom_smooth(se=F, method="loess")
+```
+
+```{r}
+library(imager)
+```
+
+```{r}
+fpath <- system.file('/Users/admin/Desktop/plots 320 FINAL/going foward/genre_only_reg.png',package='imager') 
+im <- load.image(fpath)
+plot(im)
+```
+
+```{r}
+coefs_line_reg_best = 
+  data.frame(summary(model_10)$coefficients) %>% 
+  rownames_to_column() %>% 
+  select(1, 2, 5) %>% 
+  rename(name=1, coef=2, pval=3) %>% 
+  select(-pval) %>% 
+  arrange(desc(coef)) %>% 
+  slice(2:n()) %>% 
+  mutate(type = ifelse(name %in% c("Documentary", "Animation", "Woody_Allen", "Drama", "Clint_Eastwood",
+                                   "Crime", "UK", "Music", "FR", "Comedy", "Fox_Film_Corp", 
+                                   "Warner_Bros", "Action"), "Binary Categorical", "Numeric")) %>%
+  mutate(type2 = ifelse(type == "Binary Categorical", coef + 1000, coef)) %>% 
+  mutate(name = replace(name, name=="year", "Year Released")) %>% 
+  mutate(name = replace(name, name=="length_of_title", "Length of Title")) %>%
+  mutate(name = replace(name, name=="revenue_sm", "Revenue in Millions")) %>% 
+  mutate(name = replace(name, name=="vote_count", "Vote Count")) %>% 
+  mutate(name = replace(name, name=="popularity", "Popularity")) %>% 
+  mutate(name = replace(name, name=="runtime", "Runtime in Minutes")) %>% 
+  ggplot(aes(reorder(name, type2), coef)) +
+  geom_bar(stat="identity", fill="#4B9CD3") +
+  coord_flip() +
+  facet_grid(cols = vars(type), scales="free") + 
+  theme(panel.spacing.x = unit(7.5, "mm")) +
+  ggtitle("Coefficients of Best IMDB Linear Regression Model") +
+  xlab("Variable") +
+  ylab("Change in IMDB Score per Unit of Variable") +
+  theme(strip.background = element_rect(fill="#bdddff")) +
+  theme(plot.title = element_text(hjust=0.5))
+
+coefs_line_reg_best
+```
+
+```{r}
+summary(model_10)
+```
+
+
+```{r}
+confintlinearcategorical = 
+  data.frame(summary(model_10)$coefficients) %>% 
+  rownames_to_column() %>% 
+  select(-4, -5) %>% 
+  rename(coef = 2, SE = 3) %>% 
+  mutate(lwr = coef - 1.96*SE, hwr = coef + 1.96*SE) %>% 
+  select(-3) %>% 
+  slice(2:n()) %>% 
+  mutate(rowname = replace(rowname, rowname=="length_of_title", NA)) %>% 
+  mutate(rowname = replace(rowname, rowname=="runtime", NA)) %>% 
+  mutate(rowname = replace(rowname, rowname=="vote_count", NA)) %>% 
+  mutate(rowname = replace(rowname, rowname=="popularity", NA)) %>% 
+  mutate(rowname = replace(rowname, rowname=="year", NA)) %>% 
+  mutate(rowname = replace(rowname, rowname=="revenue_sm", NA)) %>% 
+  na.omit() %>% 
+  ggplot(aes(reorder(rowname, coef), coef)) + 
+  geom_errorbar(aes(ymin = lwr, ymax = hwr), color="darkblue", width=0.5) + 
+  geom_point(aes(rowname, coef), stroke=.25, color="darkblue") +
+  coord_flip() +
+  ggtitle("95% Confidence Interval Plot of Categorical Variables in Best Linear Model") + 
+  theme(plot.title = element_text(hjust=1.1, size=14)) +
+  xlab("Variable") + 
+  ylab("Coefficient Interval")
+  
+confintlinearcategorical
+
+ggsave("/Users/admin/Desktop/plots 320 FINAL/better plots/confintlinearcategorical.png", confintlinearcategorical)
+```
+
+```{r}
+confintnumeric = 
+  data.frame(summary(model_10)$coefficients) %>% 
+  rownames_to_column() %>% 
+  select(-4, -5) %>% 
+  rename(coef = 2, SE = 3) %>% 
+  mutate(lwr = coef - 1.96*SE, hwr = coef + 1.96*SE) %>% 
+  select(-3) %>% 
+  slice(2:n()) %>% 
+  arrange(coef) %>% 
+  slice(4:n()) %>% 
+  slice(1:6) %>% 
+  mutate(rowname = replace(rowname, rowname == "runtime", "Runtime")) %>% 
+  mutate(rowname = replace(rowname, rowname == "popularity", "Popularity")) %>% 
+  mutate(rowname = replace(rowname, rowname == "vote_count", "Vote Count")) %>% 
+  mutate(rowname = replace(rowname, rowname == "revenue_sm", "Revenue in Millions")) %>% 
+  mutate(rowname = replace(rowname, rowname == "length_of_title", "Length of Title")) %>% 
+  mutate(rowname = replace(rowname, rowname == "year", "Year Released")) %>% 
+  ggplot(aes(reorder(rowname, coef), coef)) + 
+  geom_errorbar(aes(ymin = lwr, ymax = hwr), width=0.25, color="darkblue") +
+  geom_point(aes(rowname, coef), color="darkblue") +
+  coord_flip() + 
+  ggtitle("95% Confidence Interval Plot of Numeric Variables in Best Linear Model") +
+  theme(plot.title = element_text(hjust=0.5, size=14)) +
+  ylab("Coefficient Interval") +
+  xlab("Variable")
+
+confintnumeric
+
+ggsave("/Users/admin/Desktop/plots 320 FINAL/better plots/confintnumeric.png", confintnumeric)
+```
+
+```{r}
+p3 = 
+  data.frame(summary(go_model)$coefficients) %>% 
+  rownames_to_column() %>% 
+  rename(pval=5) %>% 
+  mutate(Significant = ifelse(pval <= 0.05, TRUE, FALSE)) %>% 
+  rename(coef = 2, SE = 3) %>% 
+  mutate(hwr = coef + 1.96*SE, lwr = coef - 1.96*SE) %>% 
+  select(-SE) %>% 
+  slice(2:n()) %>% 
+  ggplot(aes(reorder(rowname, coef), coef, color=Significant)) +
+  geom_errorbar(aes(ymin=lwr, ymax=hwr)) + 
+  geom_point(aes(rowname, coef), size=0.5) +
+  coord_flip() +
+  scale_color_manual(values = c("red", "darkblue")) +
+  ggtitle("95% Confidence Intervals for Coefficients Predicting IMDB Score in Genre Only Linear Regression") +
+  theme(plot.title = element_text(size=10, hjust=0.5)) +
+  ylab("Coefficient Interval") +
+  xlab("Variable")
+
+
+p3
+
+ggsave("/Users/admin/Desktop/plots 320 FINAL/better plots/p3.png", p3)
+```
+
+
+```{r}
+r_squareds = 
+  c(
+  summary(model_1)$adj.r.squared,
+  summary(model_2)$adj.r.squared,
+  summary(model_3)$adj.r.squared,
+  summary(model_4)$adj.r.squared,
+  summary(model_5)$adj.r.squared,
+  summary(model_6)$adj.r.squared,
+  summary(model_7)$adj.r.squared,
+  summary(model_8)$adj.r.squared,
+  summary(model_9)$adj.r.squared,
+  summary(model_10)$adj.r.squared)
+```
+
+```{r}
+ARS_plot =
+  data.frame(r_squareds, 
+           c("Model 1", "Model 2", "Model 3", "Model 4", "Model 5", 
+             "Model 6", "Model 7", "Model 8", "Model 9", "Model 10")) %>% 
+  cbind(sequence) %>% 
+  rename(model=2, rank=3) %>% 
+  select(rank, model, r_squareds) %>% 
+  ggplot(aes(reorder(model, rank), r_squareds)) +
+  geom_point(color="darkblue") +
+  geom_line(aes(rank, r_squareds), color="darkblue") +
+  theme(axis.text.x = element_text(size=10)) +
+  ggtitle("Adjusted R-Squared Value by Model") +
+  ylab("Adj. R-Sq") +
+  xlab("Model Number (In Order From Full to Best Model)")
+
+ARS_plot
+
+ggsave("/Users/admin/Desktop/plots 320 FINAL/better plots/ARS_plot.png", ARS_plot)
+  
+```
+
+```{r}
+sequence = data.frame(c(1, 2, 3, 4, 5, 6, 7, 8, 9, 10))
+```
+
+```{r}
+RMSEs = c(RMSE1, RMSE2, RMSE3, RMSE4, RMSE5, RMSE6, RMSE7, RMSE8, RMSE9, RMSE10)
+```
+
+```{r}
+models = c("Model 1", "Model 2", "Model 3", "Model 4", "Model 5", 
+             "Model 6", "Model 7", "Model 8", "Model 9", "Model 10")
+```
+
+
+```{r}
+RMSEs_plot =
+  data.frame(sequence, RMSEs) %>% rename(rank=1) %>% 
+  cbind(models) %>% select(rank, models, RMSEs) %>% 
+  ggplot(aes(reorder(models, rank), RMSEs)) + 
+  geom_point(color="darkblue") +
+  geom_line(aes(rank, RMSEs), color="darkblue") +
+  ggtitle("Root Mean Squared Error (RMSE) by Model") +
+  theme(axis.text.x = element_text(size=10)) +
+  xlab("Model Number (In Order From Full to Best Model)") +
+  ylab("RMSE")
+
+RMSEs_plot
+
+ggsave("/Users/admin/Desktop/plots 320 FINAL/better plots/RMSEs_plot.png", RMSEs_plot)
+```
+
+```{r}
+fstats = c(as.vector(summary(model_1)$fstatistic[1]), as.vector(summary(model_2)$fstatistic[1]), as.vector(summary(model_3)$fstatistic[1]), as.vector(summary(model_4)$fstatistic[1]), as.vector(summary(model_5)$fstatistic[1]), as.vector(summary(model_6)$fstatistic[1]), as.vector(summary(model_7)$fstatistic[1]), as.vector(summary(model_8)$fstatistic[1]), as.vector(summary(model_9)$fstatistic[1]), as.vector(summary(model_10)$fstatistic[1]))
+```
+```{r}
+length(fstats)
+```
+
+```{r}
+fstat_plot = 
+  data.frame(fstats, sequence) %>% cbind(models) %>% rename(rank=2) %>% 
+  ggplot(aes(reorder(models, rank), fstats)) + 
+  geom_point(color="darkblue") +
+  geom_line(aes(rank, fstats), color="darkblue") +
+  theme(axis.text.x = element_text(size=10)) +
+  ggtitle("F-Statistic by Model") +
+  xlab("Model Number (In Order From Full to Best Model)") +
+  ylab("F-Stat")
+
+fstat_plot
+
+ggsave("/Users/admin/Desktop/plots 320 FINAL/better plots/fstat_plot.png", fstat_plot)
+```
+
+```{r}
+library(gridExtra)
+```
+
+```{r}
+big_plot111 = grid.arrange(fstat_plot, RMSEs_plot, ARS_plot)
+big_plot111
+ggsave("/Users/admin/Desktop/plots 320 FINAL/better plots/big_plot111.png", big_plot111)
+```
+
+
+```{r}
+summary(model_10)
+```
+
+```{r}
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
