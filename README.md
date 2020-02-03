@@ -11,7 +11,7 @@ For logistic regression, we asked the question: What factors determine the profi
 Our central finding was that the factors which postitively influence the IMDB score of a movie are different
 from the factors which positively influence the profitability of a movie. In other words, the variables which
 increase the IMDB score, i.e. the degree to which movie-goers enjoy a movie, are not the same variables which
-maximize the profits of the production company. This concerning, as it suggests a mismatch between
+maximize the profits of the production company. This is concerning, as it suggests a mismatch between
 consumer tastes and preferences and what is conducive to profits in the movie business. Typically,
 we expect that, since there exists a free market, firms will be forced to cater to the consumer's tastes
 and preferences. However, this project demonstrates that this is not necessarily the case.
